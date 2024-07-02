@@ -1,0 +1,21 @@
+---
+# Whether we use a Local Cartesian (tangent plane ENU) or the UTM coordinates as our cartesian
+bool local_cartesian
+# Latitude [degrees]. Positive is north of equator; negative is south.
+float64 latitude
+# Longitude [degrees]. Positive is east of prime meridian; negative is west.
+float64 longitude
+# Altitude [m]. Positive is above the WGS 84 ellipsoid
+float64 altitude
+
+# the UTM zone (zero means UPS)
+int32 utm_zone
+# hemisphere (true means north, false means south)
+bool northp
+# transform from UTM/UPS to map frame
+geometry_msgs/Transform cartesian_transform
+# the UTM meridian convergence at the given point
+float64 utm_meridian_convergence
+
+# if the service call succeded
+bool success

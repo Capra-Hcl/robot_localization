@@ -154,6 +154,12 @@ NavSatTransform::NavSatTransform(const rclcpp::NodeOptions & options)
   set_utm_zone_srv_ = this->create_service<robot_localization::srv::SetUTMZone>(
     "setUTMZone", std::bind(&NavSatTransform::setUTMZoneCallback, this, _1, _2));
 
+  set_cartesian_transform_srv_ = this->create_service<robot_localization::srv::SetCartesianTransform>(
+    "setCartesianTransform", std::bind(&NavSatTransform::setCartesianTransform, this, _1, _2));
+
+  get_cartesian_transform_srv_ = this->create_service<robot_localization::srv::GetCartesianTransform>(
+    "getCartesianTransform", std::bind(&NavSatTransform::getCartesianTransform, this, _1, _2));
+
   std::vector<double> datum_vals;
   if (use_manual_datum_) {
     datum_vals = this->declare_parameter("datum", datum_vals);
@@ -499,6 +505,66 @@ bool NavSatTransform::setUTMZoneCallback(
   transform_good_ = false;
   has_transform_gps_ = false;
   RCLCPP_INFO(this->get_logger(), "UTM zone set to %d %s", utm_zone_, northp_ ? "north" : "south");
+  return true;
+}
+
+bool NavSatTransform::setCartesianTransform(
+  const std::shared_ptr<robot_localization::srv::SetCartesianTransform::Request> request, 
+  std::shared_ptr<robot_localization::srv::SetCartesianTransform::Response> response)
+{
+  if (request->local_cartesian) 
+  {
+    gps_local_cartesian_.Reset(
+      request->latitude, request->longitude, request->altitude);
+    use_local_cartesian_ = true;
+    return true;
+  }
+
+  tf2::Transform transform;
+  tf2::fromMsg(request->cartesian_transform, transform);
+  transform_cartesian_pose_ = transform;
+  cartesian_world_trans_inverse_ = transform.inverse();
+
+  utm_zone_ = request->utm_zone;
+  northp_ = request->northp;
+  utm_meridian_convergence_ = request->utm_meridian_convergence;
+
+  force_user_utm_ = false;
+  use_manual_datum_ = false;
+  transform_good_ = true;
+  has_transform_gps_ = true;
+
+  response->success = true;
+  return true;
+}
+
+bool NavSatTransform::getCartesianTransform(
+  const std::shared_ptr<robot_localization::srv::GetCartesianTransform::Request>, 
+  std::shared_ptr<robot_localization::srv::GetCartesianTransform::Response> response)
+{
+  if (transform_good_) 
+  {
+    response->success = false;
+    return false;
+  }
+
+  if (use_local_cartesian_) 
+  {
+    response->utm_zone = 0;
+    response->northp = true;
+    response->longitude = gps_local_cartesian_.LatitudeOrigin();
+    response->latitude = gps_local_cartesian_.LongitudeOrigin();
+    response->altitude = gps_local_cartesian_.HeightOrigin();
+  } 
+  else 
+  {
+    response->utm_zone = utm_zone_;
+    response->northp = northp_;
+    response->utm_meridian_convergence = utm_meridian_convergence_;
+  }
+
+  response->cartesian_transform = tf2::toMsg(cartesian_world_transform_);
+  response->success = true;
   return true;
 }
 
@@ -961,6 +1027,7 @@ void NavSatTransform::setTransformOdometry(
   // the odometry source, which may have multiple fused sources of
   // heading data, and so would act as a better heading for the
   // UTM->world_frame transform.
+  // Using the odometry frame, requires a heading with relation to ENU
   if (!transform_good_ && use_odometry_yaw_ && !use_manual_datum_) {
     sensor_msgs::msg::Imu imu;
     imu.orientation = msg->pose.pose.orientation;

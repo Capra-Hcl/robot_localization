@@ -44,11 +44,14 @@
 #include "robot_localization/srv/set_datum.hpp"
 #include "robot_localization/srv/set_utm_zone.hpp"
 #include "robot_localization/srv/to_ll.hpp"
+#include "robot_localization/srv/get_cartesian_transform.hpp"
+#include "robot_localization/srv/set_cartesian_transform.hpp"
 #include "sensor_msgs/msg/imu.hpp"
 #include "sensor_msgs/msg/nav_sat_fix.hpp"
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2/LinearMath/Transform.h"
 #include "tf2/LinearMath/Vector3.h"
+#include "tf2/convert.h"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/static_transform_broadcaster.h"
 #include "tf2_ros/transform_listener.h"
@@ -106,6 +109,20 @@ private:
   bool setUTMZoneCallback(
     const std::shared_ptr<robot_localization::srv::SetUTMZone::Request> request,
     std::shared_ptr<robot_localization::srv::SetUTMZone::Response>);
+
+  /**
+   * @brief Callback for setting the cartesian transform
+  */
+  bool setCartesianTransform(
+    const std::shared_ptr<robot_localization::srv::SetCartesianTransform::Request> request,
+    std::shared_ptr<robot_localization::srv::SetCartesianTransform::Response>);
+
+  /**
+   * @brief Callback for getting the cartesian transform
+  */
+  bool getCartesianTransform(
+    const std::shared_ptr<robot_localization::srv::GetCartesianTransform::Request> request,
+    std::shared_ptr<robot_localization::srv::GetCartesianTransform::Response>);
 
   /**
    * @brief Given the pose of the navsat sensor in the Cartesian frame, removes the
@@ -228,6 +245,16 @@ private:
    * @brief Service for set UTM zone
   */
   rclcpp::Service<robot_localization::srv::SetUTMZone>::SharedPtr set_utm_zone_srv_;
+
+  /**
+   * @brief Service for setting the Cartesian transform
+  */
+  rclcpp::Service<robot_localization::srv::SetCartesianTransform>::SharedPtr set_cartesian_transform_srv_;
+
+  /**
+   * @brief Service for setting the Cartesian transform
+  */
+  rclcpp::Service<robot_localization::srv::GetCartesianTransform>::SharedPtr get_cartesian_transform_srv_;
 
   /**
    * @brief Navsatfix publisher
