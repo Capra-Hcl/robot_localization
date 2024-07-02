@@ -497,6 +497,16 @@ private:
    * set.
    */
   geographic_msgs::msg::GeoPose manual_datum_geopose_;
+
+  /**
+   * @brief The maximum covariance for considering a GPS fix as valid
+   */
+  double max_gps_covariance_;
+
+  /**
+   * @brief The maximum covariance for considering a odom transform as valid
+   */
+  double max_odom_covariance_;
 };
 
 }  // namespace robot_localization

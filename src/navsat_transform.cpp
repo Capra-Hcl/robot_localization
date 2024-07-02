@@ -111,6 +111,8 @@ NavSatTransform::NavSatTransform(const rclcpp::NodeOptions & options)
   use_local_cartesian_ = this->declare_parameter("use_local_cartesian", false);
   frequency = this->declare_parameter("frequency", frequency);
   delay = this->declare_parameter("delay", delay);
+  max_gps_covariance_ = this->declare_parameter("max_gps_covariance", 0.0);
+  max_odom_covariance_ = this->declare_parameter("max_odom_covariance", 0.0);
   transform_timeout = this->declare_parameter("transform_timeout", transform_timeout);
 
   transform_timeout_ = tf2::durationFromSec(transform_timeout);
@@ -968,6 +970,16 @@ bool NavSatTransform::prepareGpsOdometry(nav_msgs::msg::Odometry * gps_odom)
 void NavSatTransform::setTransformGps(
   const sensor_msgs::msg::NavSatFix::SharedPtr & msg)
 {
+  // If the Max covariance is set, check if the covariance is within the limits
+  if (max_gps_covariance_ > 0.00001
+    && (msg->position_covariance[0] <= max_gps_covariance_) 
+    && (msg->position_covariance[4] <= max_gps_covariance_)) {
+    RCLCPP_WARN(
+      this->get_logger(), "GPS covariance above maximum set value of %f with %f.", 
+      max_gps_covariance_, msg->position_covariance[0]);
+      return;
+  }
+
   double cartesian_x {};
   double cartesian_y {};
   double cartesian_z {};
@@ -1017,6 +1029,18 @@ void NavSatTransform::setTransformGps(
 void NavSatTransform::setTransformOdometry(
   const nav_msgs::msg::Odometry::SharedPtr & msg)
 {
+if (max_odom_covariance_ > 0.0001) {
+    if (msg->pose.covariance[0] > max_odom_covariance_ ||
+      msg->pose.covariance[7] > max_odom_covariance_ ||
+      msg->pose.covariance[14] > max_odom_covariance_)
+    {
+      RCLCPP_WARN(
+        this->get_logger(), "Odom covariance above maximum set value of %f with %f.", 
+        max_odom_covariance_, msg->pose.covariance[0]);
+      return;
+    }
+  }
+
   tf2::fromMsg(msg->pose.pose, transform_world_pose_);
   has_transform_odom_ = true;
 
