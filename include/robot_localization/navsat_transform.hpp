@@ -55,6 +55,7 @@
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/static_transform_broadcaster.h"
 #include "tf2_ros/transform_listener.h"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 namespace robot_localization
 {
@@ -260,6 +261,11 @@ private:
    * @brief Navsatfix publisher
    */
   rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr filtered_gps_pub_;
+
+  /**
+   * @brief Navsatfix publisher
+   */
+  rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr local_imu_pub_;
 
   /**
    * @brief The frame_id of the GPS message (specifies mounting location)
@@ -507,6 +513,11 @@ private:
    * @brief The maximum covariance for considering a odom transform as valid
    */
   double max_odom_covariance_;
+
+  /**
+   * @brief Whether or not to publish a rotated imu message
+   */
+  bool publish_local_imu_;
 };
 
 }  // namespace robot_localization

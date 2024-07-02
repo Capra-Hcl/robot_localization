@@ -106,6 +106,7 @@ NavSatTransform::NavSatTransform(const rclcpp::NodeOptions & options)
   yaw_offset_ = this->declare_parameter("yaw_offset", 0.0);
   zero_altitude_ = this->declare_parameter("zero_altitude", false);
   publish_gps_ = this->declare_parameter("publish_filtered_gps", true);
+  publish_local_imu_ = this->declare_parameter("publish_local_imu", true);
   use_odometry_yaw_ = this->declare_parameter("use_odometry_yaw", false);
   use_manual_datum_ = this->declare_parameter("wait_for_datum", false);
   use_local_cartesian_ = this->declare_parameter("use_local_cartesian", false);
@@ -200,10 +201,8 @@ NavSatTransform::NavSatTransform(const rclcpp::NodeOptions & options)
     "gps/fix", custom_qos, std::bind(&NavSatTransform::gpsFixCallback, this, _1),
     subscriber_options);
 
-  if (!use_odometry_yaw_ && !use_manual_datum_) {
-    imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
-      "imu", custom_qos, std::bind(&NavSatTransform::imuCallback, this, _1), subscriber_options);
-  }
+  imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
+    "imu", custom_qos, std::bind(&NavSatTransform::imuCallback, this, _1), subscriber_options);
 
   rclcpp::PublisherOptions publisher_options;
   publisher_options.qos_overriding_options = rclcpp::QosOverridingOptions::with_default_policies();
@@ -235,7 +234,7 @@ void NavSatTransform::transformCallback()
   if (!transform_good_) {
     computeTransform();
 
-    if (transform_good_ && !use_odometry_yaw_ && !use_manual_datum_) {
+    if (transform_good_ && !use_odometry_yaw_ && !use_manual_datum_ && !publish_local_imu_) {
       // Once we have the transform, we don't need the IMU
       imu_sub_.reset();
     }
@@ -790,7 +789,7 @@ void NavSatTransform::imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg)
 {
   // We need the baseLinkFrameId_ from the odometry message, so
   // we need to wait until we receive it.
-  if (has_transform_odom_) {
+  if (has_transform_odom_ && !transform_good_) {
     /* This method only gets called if we don't yet have the
      * IMU data (the subscriber gets shut down once we compute
      * the transform), so we can assumed that every IMU message
@@ -834,6 +833,27 @@ void NavSatTransform::imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg)
 
       has_transform_imu_ = true;
     }
+  }
+  else {
+    if (!transform_good_) {
+      return;
+    }
+    if (local_imu_pub_ == nullptr) {
+      local_imu_pub_ = this->create_publisher<sensor_msgs::msg::Imu>(
+        "imu/data", rclcpp::QoS(10));
+      RCLCPP_INFO(this->get_logger(), "Publishing local IMU data");
+    }
+
+    // Transform the imu rotation by the transform we've computed
+    tf2::Quaternion imu_rot;
+    tf2::fromMsg(msg->orientation, imu_rot);
+    tf2::Quaternion transformed_imu_rot = cartesian_world_transform_ * imu_rot;
+
+    sensor_msgs::msg::Imu local_imu = *msg;
+    local_imu.orientation = tf2::toMsg(transformed_imu_rot);
+    local_imu.header.frame_id = world_frame_id_;
+
+    local_imu_pub_->publish(local_imu);
   }
 }
 
@@ -1029,14 +1049,14 @@ void NavSatTransform::setTransformGps(
 void NavSatTransform::setTransformOdometry(
   const nav_msgs::msg::Odometry::SharedPtr & msg)
 {
-if (max_odom_covariance_ > 0.0001) {
+  if (max_odom_covariance_ > 0.0001) {
     if (msg->pose.covariance[0] > max_odom_covariance_ ||
       msg->pose.covariance[7] > max_odom_covariance_ ||
       msg->pose.covariance[14] > max_odom_covariance_)
     {
       RCLCPP_WARN(
-        this->get_logger(), "Odom covariance above maximum set value of %f with %f.", 
-        max_odom_covariance_, msg->pose.covariance[0]);
+        this->get_logger(), "Odom covariance above maximum set value of %f with %f, %f, %f.", 
+        max_odom_covariance_, msg->pose.covariance[0], msg->pose.covariance[7], msg->pose.covariance[14]);
       return;
     }
   }
